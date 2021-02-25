@@ -25,9 +25,9 @@ Lastly, run the Docker image via the following command.
 docker run \
 	-ti \
 	--rm \
-	-v ${PWD}/infiles:/infiles:Z,ro \
-	-v ${PWD}/libfiles:/libfiles:Z,ro \
-	-v ${PWD}/outfiles:/outfiles:Z,rw \
+	-v "$PWD/infiles:/infiles:Z,ro" \
+	-v "$PWD/libfiles:/libfiles:Z,ro" \
+	-v "$PWD/outfiles:/outfiles:Z,rw" \
 	eikendev/java-decompiler
 ```
 
