@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+set -e
+
+count=0
+
+function decompile_jars {
+	local infiles
+	local decompiler
+	local outdir
+
+	infiles="$1"
+
+	if [ "$(ls -A $infiles/*.jar)" ]; then
+		for jarfile in $infiles/*.jar; do
+			jarcount=0
+
+			decompiler='cfr'
+			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
+			if [[ -e "$outdir" ]]; then
+				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
+			else
+				((jarcount+=1))
+				mkdir -p "$outdir"
+				java -Xmx6G -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir"
+			fi
+
+			decompiler='fernflower'
+			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
+			if [[ -e "$outdir" ]]; then
+				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
+			else
+				((jarcount+=1))
+				mkdir -p "$outdir"
+				java -Xmx6G -jar /opt/fernflower.jar "$jarfile" "$outdir"
+				(cd "$outdir" && unzip *.jar && rm *.jar)
+			fi
+
+			decompiler='krakatau'
+			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
+			if [[ -e "$outdir" ]]; then
+				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
+			else
+				((jarcount+=1))
+				mkdir -p "$outdir"
+				libs="$(find "$LIBFILES" -type f -iname '*.jar' -print0 | tr '\0' ';')"
+				rt='/opt/rt.jar'
+				paths="$libs$rt"
+				/opt/krakatau/decompile.py -out "$outdir" -skip -nauto -path "$paths" "$jarfile"
+			fi
+
+			decompiler='procyon'
+			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
+			if [[ -e "$outdir" ]]; then
+				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
+			else
+				((jarcount+=1))
+				mkdir -p "$outdir"
+				procyon -jar "$jarfile" -o "$outdir"
+			fi
+
+			if [[ "$jarcount" -gt 0 ]]; then
+				((count+=1))
+			fi
+		done
+	fi
+}
+
+function decompile_jars {
+	local infiles
+	local decompiler
+	local outdir
+
+	infiles="$1"
+
+	if [ "$(ls -A $INFILES/*.apk)" ]; then
+		for apkfile in $INFILES/*.apk; do
+			apkcount=0
+
+			decompiler='jadx'
+			outdir="$OUTFILES/$(basename $apkfile)-$decompiler"
+			if [[ -e "$outdir" ]]; then
+				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
+			else
+				((apkcount+=1))
+				mkdir -p "$outdir"
+				/opt/jadx/bin/jadx --deobf -d "$outdir" --log-level INFO "$apkfile"
+			fi
+
+			if [[ "$apkcount" -gt 0 ]]; then
+				((count+=1))
+			fi
+		done
+	fi
+}
+
+mkdir -p ~/enjarify
+
+if [ "$(ls -A $INFILES/*.apk)" ]; then
+	for apkfile in $INFILES/*.apk; do
+		/opt/enjarify/enjarify.sh -o "$HOME/enjarify/$(basename $apkfile).jar" "$apkfile"
+	done
+fi
+
+decompile_jars "$INFILES"
+decompile_jars "$HOME/enjarify"
+decompile_apks "$INFILES"
+
+if [[ "$count" -eq 0 ]]; then
+	printf "No files were processed.\n" >&2
+	exit 1
+else
+	find "$OUTFILES" -type f -iname '*.java' -print0 | xargs -0 --max-procs=8 astyle --suffix=none --style=java --indent=tab
+fi
