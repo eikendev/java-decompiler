@@ -60,7 +60,8 @@ COPY --from=dependencies /dependencies/out /opt
 
 ENV INFILES="/infiles" \
 	LIBFILES="/libfiles" \
-	OUTFILES="/outfiles"
+	OUTFILES="/outfiles" \
+	JAVA_XMX="2G"
 
 COPY ./src/init /init
 

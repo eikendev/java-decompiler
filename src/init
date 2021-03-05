@@ -22,7 +22,7 @@ function decompile_jars {
 			else
 				((jarcount+=1))
 				mkdir -p "$outdir"
-				java -Xmx6G -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir"
+				java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir"
 			fi
 
 			decompiler='fernflower'
@@ -32,7 +32,7 @@ function decompile_jars {
 			else
 				((jarcount+=1))
 				mkdir -p "$outdir"
-				java -Xmx6G -jar /opt/fernflower.jar "$jarfile" "$outdir"
+				java "-Xmx$JAVA_XMX" -jar /opt/fernflower.jar "$jarfile" "$outdir"
 				(cd "$outdir" && unzip *.jar && rm *.jar)
 			fi
 
@@ -66,7 +66,7 @@ function decompile_jars {
 	fi
 }
 
-function decompile_jars {
+function decompile_apks {
 	local infiles
 	local decompiler
 	local outdir
