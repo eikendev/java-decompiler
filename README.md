@@ -10,6 +10,8 @@ This Docker image is equipped with four Java decompilers:
 
 It also includes [Enjarify](https://github.com/Storyyeller/enjarify) and [jadx](https://github.com/skylot/jadx) for the decompilation of APK files.
 
+For more information on all these tools, check out [my related blog post](https://eiken.dev/blog/2021/02/how-to-break-your-jar-in-2021-decompilation-guide-for-jars-and-apks/).
+
 ## Usage
 
 First, create a directory `./infiles` that contains all your JAR and APK files you want to decompile.
