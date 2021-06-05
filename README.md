@@ -1,18 +1,17 @@
-# Java Decompiler
+<div align="center">
+	<h1>Java Decompiler</h1>
+	<h4 align="center">
+		Have your decompilers ready when you need them most.
+	</h4>
+	<p>Java Decompiler combines the strength of four popular Java decompilers.</p>
+</div>
 
-## About
+<p align="center">
+	<a href="https://hub.docker.com/r/eikendev/java-decompiler"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/eikendev/java-decompiler"/></a>&nbsp;
+	<a href="https://github.com/eikendev/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/eikendev/java-decompiler"/></a>&nbsp;
+</p>
 
-This Docker image is equipped with four Java decompilers:
-- [CFR](https://www.benf.org/other/cfr/)
-- [Fernflower](https://github.com/JetBrains/intellij-community/tree/master/plugins/java-decompiler/engine)
-- [Krakatau](https://github.com/Storyyeller/Krakatau)
-- [Procyon](https://github.com/mstrobel/procyon)
-
-It also includes [Enjarify](https://github.com/Storyyeller/enjarify) and [jadx](https://github.com/skylot/jadx) for the decompilation of APK files.
-
-For more information on all these tools, check out [my related blog post](https://eiken.dev/blog/2021/02/how-to-break-your-jar-in-2021-decompilation-guide-for-jars-and-apks/).
-
-## Usage
+## 📄&nbsp;Usage
 
 First, create a directory `./infiles` that contains all your JAR and APK files you want to decompile.
 
@@ -34,3 +33,15 @@ docker run \
 ```
 
 If you want to use [Podman](https://podman.io/), simply switch `docker` to `podman` at the start of the command.
+
+## 💡&nbsp;Background
+
+This Docker image is equipped with four Java decompilers:
+- [CFR](https://www.benf.org/other/cfr/)
+- [Fernflower](https://github.com/JetBrains/intellij-community/tree/master/plugins/java-decompiler/engine)
+- [Krakatau](https://github.com/Storyyeller/Krakatau)
+- [Procyon](https://github.com/mstrobel/procyon)
+
+It also includes [Enjarify](https://github.com/Storyyeller/enjarify) and [jadx](https://github.com/skylot/jadx) for the decompilation of APK files.
+
+For more information on all these tools, check out [my related blog post](https://eiken.dev/blog/2021/02/how-to-break-your-jar-in-2021-decompilation-guide-for-jars-and-apks/).
