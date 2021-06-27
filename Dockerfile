@@ -2,7 +2,7 @@ FROM debian AS buildbase
 
 RUN set -xe \
 	&& apt-get update \
-	&& apt-get install -y openjdk-11-jdk gradle \
+	&& apt-get install -y openjdk-11-jdk \
 	&& apt-get clean
 
 FROM debian AS runtimebase
@@ -13,6 +13,9 @@ RUN set -xe \
 	&& apt-get clean
 
 FROM buildbase AS dependencies
+
+ARG GRADLE_VERSION=7.1
+ARG GRADLE_URL=https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
 
 ARG CFR_VERSION=0.151
 ARG CFR_URL=https://github.com/leibnitz27/cfr/releases/download/${CFR_VERSION}/cfr-${CFR_VERSION}.jar
@@ -28,11 +31,18 @@ ARG JADX_URL=https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/j
 
 ARG ENJARIFY_URL=https://github.com/Storyyeller/enjarify/archive/master.tar.gz
 
-WORKDIR /dependencies
-
 RUN set -xe \
 	&& apt-get update \
-	&& apt-get install -y curl
+	&& apt-get install -y curl unzip
+
+# A recent version of Gradle is needed to build Fernflower.
+RUN set -xe \
+	&& curl -q -s -S -L --create-dirs -o ./gradle.zip $GRADLE_URL \
+	&& unzip ./gradle.zip \
+	&& mv ./gradle-${GRADLE_VERSION}/lib/* /usr/local/lib \
+	&& mv ./gradle-${GRADLE_VERSION}/bin/* /usr/local/bin
+
+WORKDIR /dependencies
 
 RUN set -xe \
 	&& curl -q -s -S -L --create-dirs -o ./out/cfr.jar $CFR_URL \
