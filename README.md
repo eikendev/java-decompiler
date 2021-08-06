@@ -28,7 +28,7 @@ docker run \
 	-v "$PWD/infiles:/infiles:Z,ro" \
 	-v "$PWD/libfiles:/libfiles:Z,ro" \
 	-v "$PWD/outfiles:/outfiles:Z,rw" \
-	eikendev/java-decompiler
+	ghcr.io/eikendev/java-decompiler:latest
 ```
 
 If you want to use [Podman](https://podman.io/), simply switch `docker` to `podman` at the start of the command.
