@@ -7,7 +7,6 @@
 </div>
 
 <p align="center">
-	<a href="https://hub.docker.com/r/eikendev/java-decompiler"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/eikendev/java-decompiler"/></a>&nbsp;
 	<a href="https://github.com/eikendev/java-decompiler/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/eikendev/java-decompiler"/></a>&nbsp;
 </p>
 
