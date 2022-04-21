@@ -1,11 +1,11 @@
-FROM debian AS buildbase
+FROM docker.io/library/debian AS buildbase
 
 RUN set -xe \
 	&& apt-get update \
 	&& apt-get install -y openjdk-11-jdk \
 	&& apt-get clean
 
-FROM debian AS runtimebase
+FROM docker.io/library/debian AS runtimebase
 
 RUN set -xe \
 	&& apt-get update \
@@ -14,10 +14,10 @@ RUN set -xe \
 
 FROM buildbase AS dependencies
 
-ARG GRADLE_VERSION=7.1
+ARG GRADLE_VERSION=7.4.2
 ARG GRADLE_URL=https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
 
-ARG CFR_VERSION=0.151
+ARG CFR_VERSION=0.152
 ARG CFR_URL=https://github.com/leibnitz27/cfr/releases/download/${CFR_VERSION}/cfr-${CFR_VERSION}.jar
 
 ARG FERNFLOWER_URL=https://github.com/fesh0r/fernflower/archive/master.tar.gz
@@ -26,7 +26,7 @@ ARG JRT_EXTRACTOR_URL=https://github.com/Storyyeller/jrt-extractor/archive/maste
 
 ARG KRAKATAU_URL=https://github.com/Storyyeller/Krakatau/archive/master.tar.gz
 
-ARG JADX_VERSION=1.2.0
+ARG JADX_VERSION=1.3.5
 ARG JADX_URL=https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip
 
 ARG ENJARIFY_URL=https://github.com/Storyyeller/enjarify/archive/master.tar.gz
