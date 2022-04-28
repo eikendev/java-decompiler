@@ -18,6 +18,7 @@ run_debug:
 
 .PHONY: run
 run:
+	podman pull ghcr.io/eikendev/java-decompiler:latest
 	podman run \
 		-ti \
 		--rm \
