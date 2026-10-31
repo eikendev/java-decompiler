@@ -1,80 +1,96 @@
-FROM docker.io/library/debian AS buildbase
+# syntax=docker/dockerfile:1
 
-RUN set -xe \
-	&& apt-get update \
-	&& apt-get install -y openjdk-11-jdk \
-	&& apt-get clean
-
-FROM docker.io/library/debian AS runtimebase
-
-RUN set -xe \
-	&& apt-get update \
-	&& apt-get install -y openjdk-11-jre python2 python3 procyon-decompiler unzip astyle \
-	&& apt-get clean
-
-FROM buildbase AS dependencies
-
-ARG GRADLE_VERSION=7.4.2
-ARG GRADLE_URL=https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
+# ---------------------------------------------------------------------------
+# Stage 1: fetch the upstream release artifacts. Versions are kept current
+# by Renovate (see renovate.json).
+# ---------------------------------------------------------------------------
+FROM docker.io/library/debian:trixie-slim AS fetch
 
 ARG CFR_VERSION=0.152
-ARG CFR_URL=https://github.com/leibnitz27/cfr/releases/download/${CFR_VERSION}/cfr-${CFR_VERSION}.jar
+ARG VINEFLOWER_VERSION=1.12.0
+ARG JADX_VERSION=1.5.6
+ARG DEX2JAR_VERSION=2.4.38
 
-ARG FERNFLOWER_URL=https://github.com/fesh0r/fernflower/archive/master.tar.gz
-
-ARG JRT_EXTRACTOR_URL=https://github.com/Storyyeller/jrt-extractor/archive/master.tar.gz
-
-ARG KRAKATAU_URL=https://github.com/Storyyeller/Krakatau/archive/master.tar.gz
-
-ARG JADX_VERSION=1.3.5
-ARG JADX_URL=https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip
-
-ARG ENJARIFY_URL=https://github.com/Storyyeller/enjarify/archive/master.tar.gz
-
-RUN set -xe \
+RUN set -eux \
 	&& apt-get update \
-	&& apt-get install -y curl unzip
+	&& apt-get install -y --no-install-recommends ca-certificates curl unzip \
+	&& rm -rf /var/lib/apt/lists/*
 
-# A recent version of Gradle is needed to build Fernflower.
-RUN set -xe \
-	&& curl -q -s -S -L --create-dirs -o ./gradle.zip $GRADLE_URL \
-	&& unzip ./gradle.zip \
-	&& mv ./gradle-${GRADLE_VERSION}/lib/* /usr/local/lib \
-	&& mv ./gradle-${GRADLE_VERSION}/bin/* /usr/local/bin
+WORKDIR /dl
 
-WORKDIR /dependencies
+RUN set -eux \
+	&& curl -fsSL -o cfr.jar "https://github.com/leibnitz27/cfr/releases/download/${CFR_VERSION}/cfr-${CFR_VERSION}.jar" \
+	&& curl -fsSL -o vineflower.jar "https://github.com/Vineflower/vineflower/releases/download/${VINEFLOWER_VERSION}/vineflower-${VINEFLOWER_VERSION}.jar" \
+	&& curl -fsSL -o jadx.zip "https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip" \
+	&& curl -fsSL -o dex2jar.zip "https://github.com/ThexXTURBOXx/dex2jar/releases/download/${DEX2JAR_VERSION}/dex-tools-${DEX2JAR_VERSION}.zip" \
+	&& mkdir -p out/cfr out/vineflower out/jadx \
+	&& mv cfr.jar out/cfr/cfr.jar \
+	&& mv vineflower.jar out/vineflower/vineflower.jar \
+	&& unzip -q jadx.zip -d out/jadx \
+	&& rm -f out/jadx/bin/*.bat \
+	&& unzip -q dex2jar.zip -d dex2jar \
+	&& mv "dex2jar/dex-tools-${DEX2JAR_VERSION}" out/dex2jar \
+	&& rm -f out/dex2jar/*.bat \
+	&& chmod 0755 out/jadx/bin/jadx out/dex2jar/*.sh
 
-RUN set -xe \
-	&& curl -q -s -S -L --create-dirs -o ./out/cfr.jar $CFR_URL \
-	&& curl -q -s -S -L --create-dirs -o ./fernflower.tgz $FERNFLOWER_URL \
-	&& mkdir -p ./fernflower && tar -C ./fernflower --strip-components=1 -xf fernflower.tgz \
-	&& (cd fernflower && gradle jar) \
-	&& mv ./fernflower/build/libs/fernflower.jar ./out \
-	&& curl -q -s -S -L --create-dirs -o ./jrt-extractor.tgz $JRT_EXTRACTOR_URL \
-	&& mkdir -p ./jrt-extractor && tar -C ./jrt-extractor --strip-components=1 -xf jrt-extractor.tgz \
-	&& (cd ./jrt-extractor && javac JRTExtractor.java && java -ea JRTExtractor) \
-	&& mv ./jrt-extractor/rt.jar ./out \
-	&& curl -q -s -S -L --create-dirs -o ./krakatau.tgz $KRAKATAU_URL \
-	&& mkdir -p ./krakatau && tar -C ./krakatau --strip-components=1 -xf krakatau.tgz \
-	&& mv ./krakatau ./out \
-	&& curl -q -s -S -L --create-dirs -o ./jadx.zip $JADX_URL \
-	&& mkdir ./out/jadx \
-	&& (cd ./out/jadx && unzip ../../jadx.zip) \
-	&& curl -q -s -S -L --create-dirs -o ./enjarify.tgz $ENJARIFY_URL \
-	&& mkdir -p ./enjarify && tar -C ./enjarify --strip-components=1 -xf enjarify.tgz \
-	&& mv ./enjarify ./out
+# ---------------------------------------------------------------------------
+# Stage 2: build Krakatau v2 (Rust). Upstream only considers the v2
+# assembler/disassembler finished; the v2 decompiler is a work in progress
+# and the v1 decompiler needs Python 2, so only `krak2 dis` is shipped.
+# Krakatau publishes no releases, so the v2 branch head is used.
+# ---------------------------------------------------------------------------
+FROM docker.io/library/rust:1-slim-trixie AS krakatau
 
-FROM runtimebase AS runtime
+ARG KRAKATAU_REF=v2
 
-COPY --from=dependencies /dependencies/out /opt
+RUN set -eux \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates git \
+	&& rm -rf /var/lib/apt/lists/*
 
-ENV INFILES="/infiles" \
-	LIBFILES="/libfiles" \
-	OUTFILES="/outfiles" \
-	JAVA_XMX="2G"
+WORKDIR /src
 
-COPY ./src/init /init
+RUN set -eux \
+	&& git init -q . \
+	&& git remote add origin https://github.com/Storyyeller/Krakatau.git \
+	&& git fetch -q --depth 1 origin "${KRAKATAU_REF}" \
+	&& git checkout -q FETCH_HEAD \
+	&& cargo build --release \
+	&& strip target/release/krak2
 
-RUN chmod 540 /init
+# ---------------------------------------------------------------------------
+# Stage 3: runtime image.
+# ---------------------------------------------------------------------------
+FROM docker.io/library/debian:trixie-slim AS runtime
 
-ENTRYPOINT ["/init"]
+RUN set -eux \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		astyle \
+		ca-certificates \
+		openjdk-21-jre-headless \
+		procyon-decompiler \
+		unzip \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& useradd --uid 1000 --user-group --no-create-home decompiler
+
+COPY --from=fetch /dl/out /opt
+COPY --from=krakatau /src/target/release/krak2 /usr/local/bin/krak2
+COPY --chmod=0755 src/init /usr/local/bin/java-decompiler
+
+ENV INFILES=/infiles \
+	LIBFILES=/libfiles \
+	OUTFILES=/outfiles \
+	HOME=/tmp \
+	PATH=/opt/jadx/bin:/opt/dex2jar:/usr/local/bin:/usr/bin:/bin
+
+VOLUME ["/infiles", "/libfiles", "/outfiles"]
+
+USER decompiler
+
+ENTRYPOINT ["/usr/local/bin/java-decompiler"]
+
+LABEL org.opencontainers.image.title="Java Decompiler" \
+	org.opencontainers.image.description="CFR, Vineflower, Procyon, jadx and Krakatau in one container for batch decompilation of JAR and APK files." \
+	org.opencontainers.image.source="https://github.com/eikendev/java-decompiler" \
+	org.opencontainers.image.licenses="MIT"

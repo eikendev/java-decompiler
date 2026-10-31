@@ -1,0 +1,9 @@
+.git
+.github
+infiles
+libfiles
+outfiles
+tests
+bkr
+renovate.json
+*.md

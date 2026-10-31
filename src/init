@@ -1,114 +1,307 @@
 #!/usr/bin/env bash
+#
+# Entrypoint of the java-decompiler image.
+#
+# Every input file in $INFILES is run through every enabled engine. Each
+# engine writes to its own directory "$OUTFILES/<input name>-<engine>" and
+# its log to "$OUTFILES/<input name>-<engine>.log". Engines run in parallel
+# (up to $JOBS at a time) and a failing engine never aborts the others.
+#
+# Exit codes: 0 all engines succeeded, 1 nothing to do, 2 at least one
+# engine failed (its output directory is kept for inspection).
 
-set -e
+set -uo pipefail
+shopt -s nullglob nocaseglob
 
-count=0
+# --- configuration ---------------------------------------------------------
 
-function decompile_jars {
-	local infiles
-	local decompiler
-	local outdir
+INFILES="${INFILES:-/infiles}"
+LIBFILES="${LIBFILES:-/libfiles}"
+OUTFILES="${OUTFILES:-/outfiles}"
 
-	infiles="$1"
+# Comma separated list of engines to run.
+DECOMPILERS="${DECOMPILERS:-cfr,vineflower,procyon,jadx,krakatau}"
 
-	if [ "$(ls -A $infiles/*.jar)" ]; then
-		for jarfile in $infiles/*.jar; do
-			jarcount=0
+# Maximum number of engines running at the same time.
+JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
+(( JOBS > 4 )) && JOBS=4
 
-			decompiler='cfr'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				java "-Xmx$JAVA_XMX" -jar /opt/cfr.jar "$jarfile" --outputdir "$outdir"
-			fi
-
-			decompiler='fernflower'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				java "-Xmx$JAVA_XMX" -jar /opt/fernflower.jar "$jarfile" "$outdir"
-				(cd "$outdir" && unzip *.jar && rm *.jar)
-			fi
-
-			decompiler='krakatau'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				libs="$(find "$LIBFILES" -type f -iname '*.jar' -print0 | tr '\0' ';')"
-				rt='/opt/rt.jar'
-				paths="$libs$rt"
-				/opt/krakatau/decompile.py -out "$outdir" -skip -nauto -path "$paths" "$jarfile"
-			fi
-
-			decompiler='procyon'
-			outdir="$OUTFILES/$(basename $jarfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((jarcount+=1))
-				mkdir -p "$outdir"
-				procyon -jar "$jarfile" -o "$outdir"
-			fi
-
-			if [[ "$jarcount" -gt 0 ]]; then
-				((count+=1))
-			fi
-		done
+# JVM options for all Java based engines. JAVA_XMX is honoured for backwards
+# compatibility; otherwise each JVM may use a quarter of the container memory.
+if [[ -z "${JAVA_OPTS:-}" ]]; then
+	if [[ -n "${JAVA_XMX:-}" ]]; then
+		JAVA_OPTS="-Xmx${JAVA_XMX}"
+	else
+		JAVA_OPTS="-XX:MaxRAMPercentage=25"
 	fi
+fi
+# The JVM ignores TMPDIR; make Java based engines honour it as well.
+[[ -n "${TMPDIR:-}" ]] && JAVA_OPTS="$JAVA_OPTS -Djava.io.tmpdir=$TMPDIR"
+export JAVA_OPTS
+
+# Extra engine arguments. JADX_ANDROID_ARGS applies to APK/DEX inputs only.
+CFR_ARGS="${CFR_ARGS:-}"
+VINEFLOWER_ARGS="${VINEFLOWER_ARGS:-}"
+PROCYON_ARGS="${PROCYON_ARGS:-}"
+JADX_ARGS="${JADX_ARGS:-}"
+JADX_ANDROID_ARGS="${JADX_ANDROID_ARGS:---deobf}"
+KRAKATAU_ARGS="${KRAKATAU_ARGS:-}"
+
+# Reformat all produced .java files with astyle (1) or leave them as is (0).
+FORMAT="${FORMAT:-1}"
+
+# Tool locations, overridable for running the script outside the image.
+CFR_JAR="${CFR_JAR:-/opt/cfr/cfr.jar}"
+VINEFLOWER_JAR="${VINEFLOWER_JAR:-/opt/vineflower/vineflower.jar}"
+PROCYON_BIN="${PROCYON_BIN:-procyon}"
+JADX_BIN="${JADX_BIN:-/opt/jadx/bin/jadx}"
+DEX2JAR_BIN="${DEX2JAR_BIN:-/opt/dex2jar/d2j-dex2jar.sh}"
+KRAK2_BIN="${KRAK2_BIN:-krak2}"
+
+# --- helpers ---------------------------------------------------------------
+
+log() { printf '%s\n' "$*" >&2; }
+
+enabled() {
+	[[ ",${DECOMPILERS}," == *",$1,"* ]]
 }
 
-function decompile_apks {
-	local infiles
-	local decompiler
-	local outdir
-
-	infiles="$1"
-
-	if [ "$(ls -A $INFILES/*.apk)" ]; then
-		for apkfile in $INFILES/*.apk; do
-			apkcount=0
-
-			decompiler='jadx'
-			outdir="$OUTFILES/$(basename $apkfile)-$decompiler"
-			if [[ -e "$outdir" ]]; then
-				printf "Directory '%s' already exists. Skipping...\n" "$outdir" >&2
-			else
-				((apkcount+=1))
-				mkdir -p "$outdir"
-				/opt/jadx/bin/jadx --deobf -d "$outdir" --log-level INFO "$apkfile"
-			fi
-
-			if [[ "$apkcount" -gt 0 ]]; then
-				((count+=1))
-			fi
-		done
-	fi
+tool_available() {
+	case "$1" in
+		cfr) [[ -r "$CFR_JAR" ]] ;;
+		vineflower) [[ -r "$VINEFLOWER_JAR" ]] ;;
+		procyon) command -v "$PROCYON_BIN" >/dev/null ;;
+		jadx) [[ -x "$JADX_BIN" ]] ;;
+		krakatau) command -v "$KRAK2_BIN" >/dev/null ;;
+		dex2jar) [[ -x "$DEX2JAR_BIN" ]] ;;
+		*) return 1 ;;
+	esac
 }
 
-mkdir -p ~/enjarify
+# All library JARs, one per line.
+libraries() {
+	[[ -d "$LIBFILES" ]] || return 0
+	find "$LIBFILES" -type f -iname '*.jar' | sort
+}
 
-if [ "$(ls -A $INFILES/*.apk)" ]; then
-	for apkfile in $INFILES/*.apk; do
-		/opt/enjarify/enjarify.sh -o "$HOME/enjarify/$(basename $apkfile).jar" "$apkfile"
+STATUS_DIR="$(mktemp -d)"
+trap 'rm -rf "$STATUS_DIR"' EXIT
+
+# jadx insists on writable config and cache directories. Point them at the
+# scratch directory so the run works with any --user and leaves no traces.
+export JADX_CONFIG_DIR="${JADX_CONFIG_DIR:-$STATUS_DIR/jadx-config}"
+export JADX_CACHE_DIR="${JADX_CACHE_DIR:-$STATUS_DIR/jadx-cache}"
+
+declare -a JOB_NAMES=()
+declare -a JOB_DIRS=()
+job_index=0
+scheduled=0
+
+# Wait until fewer than $JOBS background jobs are running.
+wait_for_slot() {
+	while (( $(jobs -rp | wc -l) >= JOBS )); do
+		wait -n 2>/dev/null || true
 	done
-fi
+}
 
-decompile_jars "$INFILES"
-decompile_jars "$HOME/enjarify"
-decompile_apks "$INFILES"
+# schedule <engine> <input file>
+# Runs "engine_<engine> <input> <outdir>" in the background unless the output
+# directory already exists.
+schedule() {
+	local engine="$1" infile="$2"
+	local name outdir logfile idx
+	name="$(basename -- "$infile")"
+	outdir="$OUTFILES/$name-$engine"
+	logfile="$OUTFILES/$name-$engine.log"
 
-if [[ "$count" -eq 0 ]]; then
-	printf "No files were processed.\n" >&2
+	if [[ -e "$outdir" ]]; then
+		log "skip   $name [$engine]: $outdir exists"
+		return 0
+	fi
+	if ! tool_available "$engine"; then
+		log "skip   $name [$engine]: tool not available"
+		return 0
+	fi
+
+	mkdir -p "$outdir"
+	idx=$job_index
+	((job_index+=1))
+	((scheduled+=1))
+	JOB_NAMES[idx]="$name [$engine]"
+	JOB_DIRS[idx]="$outdir"
+
+	wait_for_slot
+	log "start  $name [$engine]"
+	(
+		if "engine_$engine" "$infile" "$outdir" >"$logfile" 2>&1; then
+			echo 0 >"$STATUS_DIR/$idx"
+		else
+			echo "$?" >"$STATUS_DIR/$idx"
+		fi
+	) &
+}
+
+# --- engines: engine_<name> <input> <outdir> --------------------------------
+
+engine_cfr() {
+	local infile="$1" outdir="$2"
+	local -a args=()
+	local cp
+	cp="$(libraries | paste -sd: -)"
+	[[ -n "$cp" ]] && args+=(--extraclasspath "$cp")
+	# shellcheck disable=SC2086
+	java $JAVA_OPTS -jar "$CFR_JAR" "$infile" --outputdir "$outdir" --silent true "${args[@]}" $CFR_ARGS
+}
+
+engine_vineflower() {
+	local infile="$1" outdir="$2"
+	local -a args=()
+	local lib
+	while IFS= read -r lib; do
+		[[ -n "$lib" ]] && args+=("-e=$lib")
+	done < <(libraries)
+	# shellcheck disable=SC2086
+	java $JAVA_OPTS -jar "$VINEFLOWER_JAR" --folder --log-level=WARN "${args[@]}" $VINEFLOWER_ARGS "$infile" "$outdir"
+}
+
+engine_procyon() {
+	local infile="$1" outdir="$2"
+	# shellcheck disable=SC2086
+	if [[ "${infile,,}" == *.class ]]; then
+		"$PROCYON_BIN" $PROCYON_ARGS -o "$outdir" "$infile"
+	else
+		"$PROCYON_BIN" $PROCYON_ARGS -jar "$infile" -o "$outdir"
+	fi
+}
+
+engine_jadx() {
+	local infile="$1" outdir="$2"
+	local -a args=()
+	case "${infile,,}" in
+		*.apk|*.dex|*.xapk|*.apks|*.apkm)
+			# Keep the deobfuscation mapping with the output instead of next to
+			# the (read-only) input file.
+			# shellcheck disable=SC2206
+			args+=($JADX_ANDROID_ARGS --deobf-cfg-file "$outdir/deobfuscation.jobf")
+			;;
+	esac
+	# jadx's launcher reads JAVA_OPTS itself. Its own JADX_OPTS variable holds
+	# JVM flags, not decompiler flags, so it is deliberately not used here.
+	# shellcheck disable=SC2086
+	"$JADX_BIN" "${args[@]}" $JADX_ARGS --log-level ERROR -d "$outdir" "$infile"
+}
+
+engine_krakatau() {
+	local infile="$1" outdir="$2"
+	# shellcheck disable=SC2086
+	"$KRAK2_BIN" dis $KRAKATAU_ARGS --out "$outdir" "$infile"
+}
+
+# --- conversion: APK/DEX -> JAR so that the JVM engines can read them -------
+
+# convert_dex <input>
+# Sets CONVERTED_JAR to the path of the converted JAR, or to an empty string
+# if the conversion was skipped or failed. Runs in the main shell so that
+# failures are recorded in failed_conversions.
+convert_dex() {
+	local infile="$1"
+	local name outdir jar
+	name="$(basename -- "$infile")"
+	outdir="$OUTFILES/$name-dex2jar"
+	jar="$outdir/$name.jar"
+	CONVERTED_JAR=""
+
+	if [[ -s "$jar" ]]; then
+		log "skip   $name [dex2jar]: $jar exists"
+		CONVERTED_JAR="$jar"
+		return 0
+	fi
+	if ! tool_available dex2jar; then
+		log "skip   $name [dex2jar]: tool not available"
+		return 0
+	fi
+
+	mkdir -p "$outdir"
+	log "start  $name [dex2jar]"
+	if "$DEX2JAR_BIN" --force -o "$jar" "$infile" >"$OUTFILES/$name-dex2jar.log" 2>&1 && [[ -s "$jar" ]]; then
+		CONVERTED_JAR="$jar"
+	else
+		log "FAILED $name [dex2jar]: see $OUTFILES/$name-dex2jar.log"
+		failed_conversions+=("$name")
+	fi
+}
+
+# --- main ------------------------------------------------------------------
+
+if [[ ! -d "$INFILES" ]]; then
+	log "Input directory $INFILES does not exist."
 	exit 1
-else
-	find "$OUTFILES" -type f -iname '*.java' -print0 | xargs -0 --max-procs=8 astyle --suffix=none --style=java --indent=tab
 fi
+if ! mkdir -p "$OUTFILES" || [[ ! -w "$OUTFILES" ]]; then
+	log "Output directory $OUTFILES is not writable by uid $(id -u)."
+	log "Run the container with --userns=keep-id (Podman) or --user \"\$(id -u):\$(id -g)\" (Docker)."
+	exit 1
+fi
+
+declare -a java_inputs=() android_inputs=() failed_conversions=()
+CONVERTED_JAR=""
+for f in "$INFILES"/*.jar "$INFILES"/*.war "$INFILES"/*.ear "$INFILES"/*.class; do
+	java_inputs+=("$f")
+done
+for f in "$INFILES"/*.apk "$INFILES"/*.dex "$INFILES"/*.xapk "$INFILES"/*.apks "$INFILES"/*.apkm; do
+	android_inputs+=("$f")
+done
+
+if (( ${#java_inputs[@]} + ${#android_inputs[@]} == 0 )); then
+	log "No .jar, .war, .ear, .class, .apk or .dex files found in $INFILES."
+	exit 1
+fi
+
+log "engines: $DECOMPILERS (jobs: $JOBS, JAVA_OPTS: $JAVA_OPTS)"
+
+for f in "${android_inputs[@]}"; do
+	enabled jadx && schedule jadx "$f"
+	case "${f,,}" in
+		*.apk|*.dex)
+			convert_dex "$f"
+			[[ -n "$CONVERTED_JAR" ]] && java_inputs+=("$CONVERTED_JAR")
+			;;
+	esac
+done
+
+for f in "${java_inputs[@]}"; do
+	for engine in cfr vineflower procyon jadx krakatau; do
+		enabled "$engine" && schedule "$engine" "$f"
+	done
+done
+
+wait
+
+failed=0
+for (( i = 0; i < job_index; i++ )); do
+	status="$(cat "$STATUS_DIR/$i" 2>/dev/null || echo unknown)"
+	if [[ "$status" == 0 ]]; then
+		log "done   ${JOB_NAMES[i]}"
+	else
+		log "FAILED ${JOB_NAMES[i]} (exit $status): see ${JOB_DIRS[i]}.log"
+		((failed+=1))
+	fi
+done
+
+if (( scheduled == 0 && ${#failed_conversions[@]} == 0 )); then
+	log "Nothing to do: no engine ran (output directories exist already or engines are disabled)."
+	exit 1
+fi
+
+if [[ "$FORMAT" == 1 ]] && (( ${#JOB_DIRS[@]} > 0 )) && command -v astyle >/dev/null; then
+	log "formatting .java files with astyle"
+	find "${JOB_DIRS[@]}" -type f -iname '*.java' -print0 \
+		| xargs -0 -r --max-procs="$JOBS" -n 200 astyle --quiet --suffix=none --style=java --indent=tab >/dev/null
+fi
+
+if (( failed > 0 || ${#failed_conversions[@]} > 0 )); then
+	log "$(( failed + ${#failed_conversions[@]} )) job(s) failed."
+	exit 2
+fi
+
+log "all $scheduled job(s) succeeded."
