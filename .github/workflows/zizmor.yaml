@@ -1,0 +1,26 @@
+name: zizmor
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan-workflows:
+    name: Scan workflows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@v0.7.1
+        with:
+          advanced-security: false # Requires GitHub Advanced Security on private repos
+          annotations: true
