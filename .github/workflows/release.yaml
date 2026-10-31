@@ -23,7 +23,7 @@ env:
 jobs:
   ci:
     name: Continuous Integration
-    uses: ./.github/workflows/pr.yaml
+    uses: $/.github/workflows/pr.yaml
 
   release:
     name: Create release
