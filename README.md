@@ -7,7 +7,7 @@
 </div>
 
 <p align="center">
-	<a href="https://github.com/eikendev/java-decompiler/actions/workflows/ci.yaml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/eikendev/java-decompiler/ci.yaml?branch=main"/></a>&nbsp;
+	<a href="https://github.com/eikendev/java-decompiler/actions/workflows/release.yaml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/eikendev/java-decompiler/release.yaml?branch=main"/></a>&nbsp;
 	<a href="https://github.com/eikendev/java-decompiler/pkgs/container/java-decompiler"><img alt="Image" src="https://img.shields.io/badge/ghcr.io-eikendev%2Fjava--decompiler-blue"/></a>&nbsp;
 	<a href="https://github.com/eikendev/java-decompiler/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/eikendev/java-decompiler"/></a>&nbsp;
 </p>
@@ -118,16 +118,14 @@ Decompilers parse untrusted input, so the image is built to limit what a malicio
 
 - Runs as an unprivileged user, and the input volumes can be mounted read-only.
 - Every tool is pinned to a specific release and fetched from its upstream GitHub release page.
-- Images are built for both architectures on GitHub Actions with SBOM and SLSA provenance attached, and the manifest is signed with [cosign](https://github.com/sigstore/cosign) (keyless):
+- Images are built for both architectures on GitHub Actions with an SBOM and signed build provenance that you can verify:
 
   ```bash
-  cosign verify ghcr.io/eikendev/java-decompiler:latest \
-  	--certificate-identity-regexp 'https://github.com/eikendev/java-decompiler/' \
-  	--certificate-oidc-issuer https://token.actions.githubusercontent.com
+  gh attestation verify oci://ghcr.io/eikendev/java-decompiler:latest --owner eikendev
   ```
 - The image is rebuilt weekly so Debian security updates land without a code change.
 
-Tagged releases are available as `ghcr.io/eikendev/java-decompiler:<version>` next to `latest`.
+Releases are cut by [Release Please](https://github.com/googleapis/release-please) from the commit history, and each release is also published as `ghcr.io/eikendev/java-decompiler:<version>`.
 
 ## 🛠️&nbsp;Development
 
