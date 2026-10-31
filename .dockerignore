@@ -5,7 +5,6 @@ libfiles
 outfiles
 tests
 bkr
-renovate.json
 release-please-config.json
 .release-please-manifest.json
 *.md

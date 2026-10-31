@@ -1,0 +1,41 @@
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build(docker)"
+    labels:
+      - "area:deps"
+    pull-request-branch-name:
+      separator: "-"
+    cooldown:
+      default-days: 7
+    groups:
+      docker-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build(actions)"
+    labels:
+      - "area:deps"
+    pull-request-branch-name:
+      separator: "-"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"

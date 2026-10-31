@@ -135,5 +135,5 @@ make test             # build and run the smoke test
 make check            # static checks (shellcheck)
 ```
 
-Decompiler versions are build arguments at the top of the `Dockerfile`.
-Renovate opens pull requests for new decompiler releases, base images, and GitHub Actions.
+Decompiler versions are build arguments at the top of the `Dockerfile` and are bumped by hand.
+Dependabot keeps the base images and GitHub Actions current.

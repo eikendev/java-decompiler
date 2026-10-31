@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------------------
-# Stage 1: fetch the upstream release artifacts. Versions are kept current
-# by Renovate (see renovate.json).
+# Stage 1: fetch the upstream release artifacts. Bump the versions below by
+# hand; Dependabot only covers the base images and GitHub Actions.
 # ---------------------------------------------------------------------------
 FROM docker.io/library/debian:trixie-slim AS fetch
 
