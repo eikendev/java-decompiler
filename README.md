@@ -20,7 +20,7 @@ Installing five decompilers with their Java and Rust toolchains is tedious; pull
 
 This also makes the image a convenient front-end for AI-assisted reverse engineering: language models work on source code, not bytecode.
 Point the image at a JAR, then let your assistant read `./outfiles`.
-See [Using with AI assistants](#-using-with-ai-assistants).
+See [Using with AI assistants](#using-with-ai-assistants).
 
 ## 📄&nbsp;Usage
 
