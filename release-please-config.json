@@ -1,0 +1,17 @@
+{
+	"include-component-in-tag": false,
+	"pull-request-title-pattern": "chore: release v${version}",
+	"bootstrap-sha": "34966480b4bf4b212a49c7ee7d0cd04321d71141",
+	"changelog-sections": [
+		{ "type": "feat", "section": "Features" },
+		{ "type": "fix", "section": "Bug Fixes" },
+		{ "type": "perf", "section": "Performance" },
+		{ "type": "docs", "section": "Documentation" },
+		{ "type": "build", "section": "Build" }
+	],
+	"packages": {
+		".": {
+			"release-type": "simple"
+		}
+	}
+}
