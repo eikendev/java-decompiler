@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/eikendev/java-decompiler/compare/v1.0.0...v1.0.1) (2026-10-31)
+
+
+### Documentation
+
+* fix anchor of ai assistants link ([3865b16](https://github.com/eikendev/java-decompiler/commit/3865b16d95a6a5a86106d4a7e645368109b5a32b))
+
 ## 1.0.0 (2026-10-31)
 
 
